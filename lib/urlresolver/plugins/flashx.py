@@ -50,14 +50,30 @@ class FlashxResolver(Plugin, UrlResolver, PluginSettings):
 
     def __get_link(self, web_url, headers):
         html = self.net.http_GET(web_url, headers=headers).content
-        for match in re.finditer('(eval\(function\(p,a,c,k,e,d\).*?)</script>', html, re.DOTALL):
-            js = jsunpack.unpack(match.group(1))
-            match2 = re.search('file\s*:\s*"([^"]+(?:video|mobile)[^"]+)', js)
-            if match2:
-                return match2.group(1)
+	hash = re.search('name="hash" value="(.*?)"', html, re.S)
+	idnr = re.search('name="id" value="(.*?)"', html, re.S)
+	obnr = re.search('name="op" value="(.*?)"', html, re.S)
+	if hash and id and obnr:
+		dataPost = {'op':obnr.group(1),'usr_login': '', 'id': idnr.group(1), 'hash': hash.group(1), 'imhuman': 'Proceed+to+video'}
+		url = 'http://www.flashx.tv/dl?%s' % idnr.group(1)
+		common.addon.show_countdown(6)
+        	html = self.net.http_POST(url, form_data=dataPost, headers=headers).content
+		get_packedjava = re.findall("<script type=.text.javascript.>(eval.function.*?)</script>", html, re.S)
+		sUnpacked = jsunpack.unpack(get_packedjava[0])
+		if sUnpacked:
+			best = 0
+			links = re.findall('file:"(http.*?)",label:"(\d+)', sUnpacked, re.S)
+			for stream in links:
+				if stream[1] > best:
+					best = stream[1]
+					bestlink = stream[0]
+			if bestlink:
+				return bestlink
+	raise UrlResolver.ResolverError('Unable to resolve Flashx link. Filelink not found.')
+
         
     def get_url(self, host, media_id):
-        return 'http://flashx.tv/embed-%s.html' % media_id
+        return 'http://www.flashx.tv/%s.html' % media_id
 
     def get_host_and_id(self, url):
         r = re.search(self.pattern, url)
